@@ -47,6 +47,15 @@ type ParityTrace struct {
 	TransactionHash     *common.Hash `json:"transactionHash,omitempty"`
 	TransactionPosition *uint64      `json:"transactionPosition,omitempty"`
 	Type                string       `json:"type"`
+	Logs                []TraceLog   `json:"logs"`
+}
+
+type TraceLog struct {
+	Address  common.Address `json:"address"`
+	Topics   []common.Hash  `json:"topics"`
+	Data     hexutil.Bytes  `json:"data"`
+	LastAddr []int          `json:"lastAddr"`
+	Index    int            `json:"index"`
 }
 
 // ParityTraces An array of parity traces

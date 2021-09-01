@@ -3,10 +3,12 @@ package commands
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -225,6 +227,8 @@ func (args *TraceCallParam) ToMessage(globalGasCap uint64, baseFee *uint256.Int)
 type OeTracer struct {
 	r            *TraceCallResult
 	traceAddr    []int
+	lastAddr     []int
+	logIndex     int
 	traceStack   []*ParityTrace
 	precompile   bool // Whether the last CaptureStart was called with `precompile = true`
 	compat       bool // Bug for bug compatibility mode
@@ -278,6 +282,7 @@ func (ot *OeTracer) CaptureStart(depth int, from common.Address, to common.Addre
 	}
 	//fmt.Printf("CaptureStart depth %d, from %x, to %x, create %t, input %x, gas %d, value %d\n", depth, from, to, create, input, gas, value)
 	trace := &ParityTrace{}
+	trace.Logs = []TraceLog{}
 	if create {
 		trResult := &CreateTraceResult{}
 		trace.Type = CREATE
@@ -335,6 +340,7 @@ func (ot *OeTracer) CaptureStart(depth int, from common.Address, to common.Addre
 	}
 	ot.r.Trace = append(ot.r.Trace, trace)
 	ot.traceStack = append(ot.traceStack, trace)
+	// ot.lastAddr = nil
 	return nil
 }
 
@@ -406,13 +412,61 @@ func (ot *OeTracer) CaptureEnd(depth int, output []byte, startGas, endGas uint64
 		}
 	}
 	ot.traceStack = ot.traceStack[:len(ot.traceStack)-1]
+	ot.lastAddr = topTrace.TraceAddress
 	if depth > 0 {
 		ot.traceAddr = ot.traceAddr[:len(ot.traceAddr)-1]
 	}
 	return nil
 }
 
+func (ot *OeTracer) captureLogState(op vm.OpCode, memory *vm.Memory, st *stack.Stack, contract *vm.Contract) {
+	if op == vm.LOG0 || op == vm.LOG1 || op == vm.LOG2 || op == vm.LOG3 || op == vm.LOG4 {
+		offset, _ := strconv.ParseInt(hex.EncodeToString(st.Data[st.Len()-1].Bytes()), 16, 0)
+		length, _ := strconv.ParseInt(hex.EncodeToString(st.Data[st.Len()-2].Bytes()), 16, 0)
+		data := memory.GetCopy(uint64(offset), uint64(length))
+		var topics []common.Hash
+		if op == vm.LOG1 {
+			topics = []common.Hash{
+				common.BytesToHash(st.Data[st.Len()-3].Bytes()),
+			}
+		}
+		if op == vm.LOG2 {
+			topics = []common.Hash{
+				common.BytesToHash(st.Data[st.Len()-3].Bytes()),
+				common.BytesToHash(st.Data[st.Len()-4].Bytes()),
+			}
+		}
+		if op == vm.LOG3 {
+			topics = []common.Hash{
+				common.BytesToHash(st.Data[st.Len()-3].Bytes()),
+				common.BytesToHash(st.Data[st.Len()-4].Bytes()),
+				common.BytesToHash(st.Data[st.Len()-5].Bytes()),
+			}
+		}
+		if op == vm.LOG4 {
+			topics = []common.Hash{
+				common.BytesToHash(st.Data[st.Len()-3].Bytes()),
+				common.BytesToHash(st.Data[st.Len()-4].Bytes()),
+				common.BytesToHash(st.Data[st.Len()-5].Bytes()),
+				common.BytesToHash(st.Data[st.Len()-6].Bytes()),
+			}
+		}
+		log := TraceLog{
+			Address:  contract.Address(),
+			Topics:   topics,
+			Data:     data,
+			LastAddr: ot.lastAddr,
+			Index:    ot.logIndex,
+		}
+		traceStack := ot.traceStack[len(ot.traceStack)-1]
+		traceStack.Logs = append(traceStack.Logs, log)
+		ot.logIndex += 1
+		fmt.Println(log)
+	}
+}
+
 func (ot *OeTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, st *stack.Stack, rData []byte, contract *vm.Contract, opDepth int, err error) error {
+	ot.captureLogState(op, memory, st, contract)
 	if ot.r.VmTrace != nil {
 		var vmTrace *VmTrace
 		if len(ot.vmOpStack) > 0 {
