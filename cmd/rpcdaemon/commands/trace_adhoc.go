@@ -461,7 +461,7 @@ func (ot *OeTracer) captureLogState(op vm.OpCode, memory *vm.Memory, st *stack.S
 		traceStack := ot.traceStack[len(ot.traceStack)-1]
 		traceStack.Logs = append(traceStack.Logs, log)
 		ot.logIndex += 1
-		fmt.Println(log)
+		// fmt.Println(log)
 	}
 }
 
