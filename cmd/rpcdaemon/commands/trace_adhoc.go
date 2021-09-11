@@ -421,6 +421,9 @@ func (ot *OeTracer) CaptureEnd(depth int, output []byte, startGas, endGas uint64
 
 func (ot *OeTracer) captureLogState(op vm.OpCode, memory *vm.Memory, st *stack.Stack, contract *vm.Contract) {
 	if op == vm.LOG0 || op == vm.LOG1 || op == vm.LOG2 || op == vm.LOG3 || op == vm.LOG4 {
+		if len(st.Data) == 0 {
+			return
+		}
 		offset, _ := strconv.ParseInt(hex.EncodeToString(st.Data[st.Len()-1].Bytes()), 16, 0)
 		length, _ := strconv.ParseInt(hex.EncodeToString(st.Data[st.Len()-2].Bytes()), 16, 0)
 		data := memory.GetCopy(uint64(offset), uint64(length))
