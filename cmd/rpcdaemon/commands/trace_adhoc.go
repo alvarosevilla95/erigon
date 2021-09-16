@@ -340,7 +340,7 @@ func (ot *OeTracer) CaptureStart(depth int, from common.Address, to common.Addre
 	}
 	ot.r.Trace = append(ot.r.Trace, trace)
 	ot.traceStack = append(ot.traceStack, trace)
-	// ot.lastAddr = nil
+	ot.lastAddr = nil
 	return nil
 }
 
